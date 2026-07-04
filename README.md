@@ -34,7 +34,7 @@ Simply drag-and-drop the pickle file into the website. The file is not uploaded 
 The control buttons Peak, Selection, and Full Trace have the functions of setting the active time to the time of peak memory usage, narrowing the shown allocations to the current selection, or resetting it to all allocations in the file, respectively.
 
 ## Showcase Image
-![alt text](https://github.com/kilianmandon/torch-memory-visualizer/blob/main/images/torch_memory_visualizer_example.jpg?raw=true)
+![alt text](https://github.com/kilianmandon/torch-memory-visualizer/blob/main/images/torch_memory_visualizer_example.png?raw=true)
 
 ## Similar Projects
 PyTorch's own Memory Visualizer is open source and can be found [here](https://github.com/pytorch/pytorch/tree/main/torch/utils/viz). It is available as a Website [here](https://docs.pytorch.org/memory_viz). This project used the JavaScript python-unpickler from PyTorch's implementation.
