@@ -1,0 +1,87 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.headerTotal {
+  color: var(--accent);
+}
+
+.tree {
+  padding: var(--space-2) 0;
+  overflow-y: auto;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding-right: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  isolation: isolate;
+  border: 1px solid transparent;
+}
+
+.row:hover {
+  border: 1px solid var(--accent-dim);
+}
+
+.rowSelected {
+  background: var(--accent-dim);
+}
+
+/* proportional fill showing this node's share of its parent's memory */
+.sizeBar {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to right, var(--accent-dim), transparent);
+}
+
+.rowLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.expandToggle {
+  display: inline-flex;
+  width: 12px;
+  justify-content: center;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.size {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  padding-left: var(--space-2);
+}

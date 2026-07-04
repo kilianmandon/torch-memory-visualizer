@@ -1,0 +1,95 @@
+.app {
+  min-height: 100vh;
+  padding: var(--space-4);
+  background-color: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+@media (min-width: 1100px) {
+  .panels {
+    /* Changed minmax configuration to handle variable dynamic flex layouts */
+    grid-template-columns: 400px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+/* Base structural panel element style fix */
+.panel {
+  text-align: left;
+  /* Removed height: 50vh constraint to let layout heights scale gracefully */
+  min-height: 450px; 
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sliderRow {
+  display: grid;
+  grid-template-columns: 110px 1fr 80px;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+button {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent-dim);
+}
+
+button:active {
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+.controlsDivider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-2) 0;
+}

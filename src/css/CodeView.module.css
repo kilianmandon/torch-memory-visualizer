@@ -1,0 +1,24 @@
+.panel {
+  text-align: left;
+  height: 50vh;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.filename {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.codewrapper {
+  margin: 0px;
+  font-size: 0.8rem;
+}

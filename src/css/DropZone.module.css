@@ -1,0 +1,43 @@
+.wrapper {
+  position: relative;
+  min-height: 100vh;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(13, 17, 23, 0.92);
+  border: 2px dashed var(--accent);
+  pointer-events: none;
+}
+
+.overlayText {
+  font-family: var(--font-mono);
+  font-size: 1.4rem;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 300px;
+  margin: var(--space-4);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.emptyState:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
