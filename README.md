@@ -1,6 +1,6 @@
 # Torch Memory Visualizer
 
-This project provides a static website to inspect and debug CUDA Memory snapshots from PyTorch, similar to [this](https://docs.pytorch.org/memory_viz) tool from PyTorch. Compared to the tool by PyTorch, this one uses your source code to give info on which parts of your code make up how much memory.
+This project provides a static website ([try it!](https://kilianmandon.github.io/torch-memory-visualizer/)) to inspect and debug CUDA Memory snapshots from PyTorch, similar to [this](https://docs.pytorch.org/memory_viz) tool from PyTorch. Compared to the tool by PyTorch, this one uses your source code to give info on which parts of your code make up how much memory.
 
 ## Usage
 ### Generate a Snapshot
@@ -35,3 +35,6 @@ The control buttons Peak, Selection, and Full Trace have the functions of settin
 
 ## Showcase Image
 ![alt text](https://github.com/kilianmandon/torch-memory-visualizer/blob/main/images/torch_memory_visualizer_example.jpg?raw=true)
+
+## Similar Projects
+PyTorch's own Memory Visualizer is open source and can be found [here](https://github.com/pytorch/pytorch/tree/main/torch/utils/viz). It is available as a Website [here](https://docs.pytorch.org/memory_viz). This project used the JavaScript python-unpickler from PyTorch's implementation.
