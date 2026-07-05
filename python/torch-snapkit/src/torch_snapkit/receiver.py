@@ -1,3 +1,21 @@
+"""
+receiver.py
+
+A convenience module that calls the Peer-to-Peer file sharing tool croc in receiving mode in a loop, saving all incoming files that were send with the specific share_code.
+
+Designed for this scenario:
+You are running your ML experiments on a remote instance and want to visualize your memory snapshots. 
+Then, you let this program idle on your local machine:
+```
+snapkit-receive your_secret_code
+```
+On the remote machine, you use the memory snapshot tool with share=True:
+```
+with memory_snapshot('test_run', share=True, share_code='your_secret_code'):
+    ... your PyTorch code
+```
+Now, all your snapshots will be automatically downloaded to your local machine so you can inspect them.
+"""
 import os
 import shutil
 import subprocess

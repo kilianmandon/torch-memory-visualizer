@@ -11,6 +11,35 @@ from contextlib import ExitStack
 
 class memory_snapshot:
     def __init__(self, snapshot_name, save_path:str|Path=None, on_oom:bool=True, source_root:str|Path=None, share:bool=False, share_code:str=None):
+        """
+        A context manager that wraps PyTorch's memory utils to record all memory events, and appends your project's 
+        source code to the snapshot. With the attached source code, the snapshots can be used 
+        in the Torch Memory Visualizer.
+
+        Args:
+            snapshot_name (str): Name of your snapshot. If save_path only leads to a directory, this name 
+                is used to build the filename.
+            save_path (str | Path, optional): Output filepath of the memory snapshot. If None, no local file will be saved. Either save_path or share=True must be provided. Defaults to None.
+            on_oom (bool, optional): Whether or not to register an observer that specifically
+                saves snapshots when an OOM event occured. Defaults to True.
+            source_root (str | Path, optional): Root directory of your project. 
+                If None, the working directory will be used. Files will be saved, if they
+                - fall within source_root/**/*.py
+                - occured in the snapshot
+                - do not contain 'site-packages'
+
+                Defaults to None.
+            share (bool, optional): Whether or not to provide the snapshot for peer-to-peer file sharing
+                with croc. This is for situations in which you want to download the snapshot from a cloud
+                instance to your local machine. Defaults to False.
+            share_code (str, optional): The sharing code used by croc. If None, a random code will be generated. 
+                Defaults to None.
+
+        Raises:
+            ValueError: If invalid parameters are chosen, or if CUDA is not available (memory recording
+                only works on CUDA devices).
+        """
+
         if save_path is None and not share:
             raise ValueError(f"Either save_path or share=True must be set to save the generated snapshot.")
 
