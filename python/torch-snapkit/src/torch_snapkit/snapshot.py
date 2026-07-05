@@ -1,6 +1,8 @@
 import subprocess
+import os
 from tempfile import TemporaryDirectory
 import pickle
+import shutil
 
 import torch
 from pathlib import Path
@@ -15,6 +17,9 @@ class memory_snapshot:
         if not torch.cuda.is_available():
             raise ValueError("CUDA is not available. Memory snapshot generation only supports CUDA.")
 
+        if share and shutil.which('croc') is None:
+            raise ValueError("""The share=True option was enabled, but croc is not available. Install croc using "curl https://getcroc.schollz.com | bash".""")
+
         if source_root is None:
             self.source_root = Path('.')
         elif isinstance(source_root, str):
@@ -27,7 +32,7 @@ class memory_snapshot:
         if self.save_path is not None:
             self.save_path = Path(save_path)
             if self.save_path.is_dir():
-                self.save_path = f'{snapshot_name}_snapshot.pkl'
+                self.save_path = self.save_path / f'{snapshot_name}_snapshot.pkl'
         self.on_oom=on_oom
         self.share=share
         self.share_code=share_code
@@ -46,37 +51,51 @@ class memory_snapshot:
 
     def __exit__(self, exc_type, exc, tb):
         try:
-            torch.cuda.memory._record_memory_history(enabled=None)
-            tmp_file = self.tempdir + "/memory_snapshot.pkl"
-            if not self._ended_with_oom:
-                torch.cuda.memory._dump_snapshot(tmp_file) 
-
-            if self.save_path is not None:
-                out_path = self.save_path
+            if exc_type is not None and exc_type!=torch.OutOfMemoryError:
+                print("Exception observed (non-OOM), snapshot is not being saved.")
             else:
-                out_path = self.tempdir + "/memory_snapshot_code_attached.pkl"
+                if not self._ended_with_oom:
+                    data = torch.cuda.memory._snapshot() 
+                else:
+                    data = self._oom_snapshot
 
-            self.attach_source_code(tmp_file, out_path)
+                assert 'device_traces' in data, 'No device traces recorded.'
+                assert len(data['device_traces'][0]) > 0, 'No memory events recorded in device trace.'
 
-            if self.share:
-                self.share_snapshot(out_path)
+                if self.save_path is not None:
+                    out_path = self.save_path
+                else:
+                    out_path = self.tempdir + f'/{self.snapshot_name}_snapshot.pkl'
+
+                self.attach_source_code(data, out_path)
+
+                if self.share:
+                    self.share_snapshot(out_path)
         finally:
             self._stack.close()
+            torch.cuda.memory._record_memory_history(enabled=None)
 
     def share_snapshot(self, snapshot_path):
+        print('\nSharing snapshot through croc, download by running snapkit-receiver your_secret_code or directly using croc.')
         snapshot_path = str(snapshot_path)
-        cmd = ['wormhole', 'send', snapshot_path]
+        env = os.environ.copy()
+        cmd = ['croc', 'send', snapshot_path]
         if self.share_code is not None:
-            cmd.extend(['--code', self.share_code])
+            env["CROC_SECRET"] = self.share_code
 
-        subprocess.run(cmd)
+        for i in range(5):
+            result = subprocess.run(cmd, env=env)
+            if result.returncode == 0:
+                print("Transfer successful!")
+                break
+            else:
+                print("Transfer failed, retrying...")
+        else:
+            print("Transfer failed. Memory snapshot was not shared.")
 
 
 
-    def attach_source_code(self, in_file, out_file):
-        with open(in_file, 'rb') as f:
-            data = pickle.load(f)
-
+    def attach_source_code(self, data, out_file):
         available_source_filenames = []
         for path in self.source_root.glob('**/*.py'):
             filename = str(path.absolute())
@@ -95,8 +114,6 @@ class memory_snapshot:
             if filename and Path(filename).exists():
                 if filename in available_source_filenames:
                     used_source_filenames.append(filename)
-                else:
-                    print(f"Skipping path {filename}")
 
         source_code = {filename: Path(filename).read_text() for filename in used_source_filenames}
         data['source_code'] = source_code
@@ -108,8 +125,8 @@ class memory_snapshot:
     def setup_oom_observer(self):
         def oom_observer(device, alloc, device_alloc, device_free):
             # snapshot right after an OOM happened
-            print('Saving memory snapshot after OOM.')
-            torch.cuda.memory._dump_snapshot(self.tempdir + "/memory_snapshot.pkl")
+            print('CUDA OOM observerd, saving memory snapshot.')
+            self._oom_snapshot = torch.cuda.memory._snapshot()
             self._ended_with_oom = True
 
         torch._C._cuda_attach_out_of_memory_observer(oom_observer)
