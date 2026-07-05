@@ -1,0 +1,20 @@
+[project]
+name = "torch-memviz"
+version = "0.1.0"
+description = "Generate PyTorch CUDA memory snapshots for torch-memory-visualizer"
+readme = "README.md"
+authors = [
+    { name = "Kilian Mandon", email = "kilian.mandon@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "magic-wormhole>=0.24.0",
+    "torch>=2.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/kilianmandon/torch-memory-visualizer"
+
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"
