@@ -1,10 +1,24 @@
 # Torch Memory Visualizer
 
-This project provides a static website ([try it!](https://kilianmandon.github.io/torch-memory-visualizer/)) to inspect and debug CUDA Memory snapshots from PyTorch, similar to [this](https://docs.pytorch.org/memory_viz) tool from PyTorch. Compared to the tool by PyTorch, this one uses your source code to give info on which parts of your code make up how much memory.
+This project provides a static website ([try it!](https://kilianmandon.github.io/torch-memory-visualizer/)) for inspecting and debugging CUDA Memory snapshots from PyTorch, similar to [PyTorch's Memory Visualizer](https://docs.pytorch.org/memory_viz). Compared to the tool by PyTorch, this one uses your source code to show which parts of your code are responsible for memory usage.
 
 ## Usage
 ### Generate a Snapshot
-Create a PyTorch snapshot as usual, and then add a `source_code` attribute to the pickle dump, e.g.
+The easiest way to create a memory snapshot and attach the source code is through the accompanying python package `torch-snapkit`:
+```
+pip install torch-snapkit
+```
+With this library, you can record a snapshot like this:
+```python
+from torch_snapkit import memory_snapshot
+
+with memory_snapshot('test_run', save_path='.'):
+    # Your pytorch code goes here
+    ...
+```
+The library also includes some options to directly download the snapshot from the machine where you are running the model to your local machine. 
+
+If you don't want to use the library, the above is roughly equivalent to this:
 ```python
 import pickle
 from pathlib import Path
