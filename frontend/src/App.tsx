@@ -93,12 +93,14 @@ interface ButtonControlsProps {
   numMemoryEvents: number;
 }
 
+export function formatBytes(v: number) {
+  if (v==0) return "0";
+  if (v >= 1024**3 / 10) return `${(v/1024**3).toFixed(1)} GiB`
+  else return `${(v/1024**2).toFixed(0)} MiB`
+}
+
 function ButtonControls({ onPeak, onSelection, onFull, onPolygonChange, onPolygonChangeCommitted, onNodeThresholdChange, numMemoryEvents, polygonCount, nodeThreshold }: ButtonControlsProps) {
-  const formatMB = (v: number) => {
-    if (v === 0) return "0"
-    if (v >= 1024) return `${(v / 1024).toFixed(2)} GB`
-    return `${v} MB`;
-  }
+
   return (
     <div className={styles.controls}>
       <div className={styles.header}>
@@ -132,7 +134,7 @@ function ButtonControls({ onPeak, onSelection, onFull, onPolygonChange, onPolygo
           value={nodeThreshold}
           onChange={(e) => onNodeThresholdChange(Number(e.target.value))}
         />
-        <span>{formatMB(nodeThreshold)}</span>
+        <span>{formatBytes(nodeThreshold * 1024**2)}</span>
       </div>
     </div>
   )

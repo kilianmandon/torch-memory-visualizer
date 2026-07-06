@@ -1,4 +1,4 @@
-import { nodeByID, type NodeSelection } from "../App";
+import { formatBytes, nodeByID, type NodeSelection } from "../App";
 import type { MemoryTree, MethodNode, SourceCodeAnalysis } from "../types/memory_tree_types";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import { a11yDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
@@ -46,7 +46,7 @@ export function CodeView({ nodeSelection, sourceCodeAnalysis, memoryTree }: Prop
             const lineTotalSize = childs.map(n => n.aggregationInfo!.totalSize).reduce((a, b) => a + b, 0);
             const lineTotalNum = childs.map(n => n.aggregationInfo!.totalCount).reduce((a, b) => a + b, 0);
             const prefix = " ".repeat(lineMaxLength - sourcecodeFile[i + activeNode.lineno_start].length)
-            const comment = lineTotalNum > 0 ? `${prefix} # ${(lineTotalSize / 1024 ** 3).toFixed(1)} GiB | ${lineTotalNum} events` : "";
+            const comment = lineTotalNum > 0 ? `${prefix} # ${formatBytes(lineTotalSize)} | ${lineTotalNum} events` : "";
             return comment;
         });
         for (let [i, annotation] of methodLineAdditions.entries()) {

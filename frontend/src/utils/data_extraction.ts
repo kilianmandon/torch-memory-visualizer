@@ -43,7 +43,7 @@ function extractEvent(trace_event: TraceEvent, start: number, end: number, event
         frames.push({filename: frame.filename, lineno: frame.line-1, name: frame.name})
     }
 
-    frames = [...forwardFrames, ...frames]
+    frames = [...forwardFrames.reverse(), ...frames]
         
     return {
         start, end,

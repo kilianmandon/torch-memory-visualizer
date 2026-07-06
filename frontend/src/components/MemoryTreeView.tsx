@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { isMethodNode, type MemoryTree, type MethodNode } from "../types/memory_tree_types";
-import { nodeByID, type NodeSelection } from "../App";
+import { formatBytes, nodeByID, type NodeSelection } from "../App";
 import styles from "../css/MemoryTreeView.module.css";
 import { walkAllNodes } from "../utils/memory_tree";
 
 function isLarge(node: MethodNode, threshold: number) {
-    return (node.aggregationInfo?.totalSize ?? 0) > threshold * 1024**2;
+    return (node.aggregationInfo?.totalSize ?? 0) > threshold * 1024 ** 2;
 }
 function getNodeChildren(node: MethodNode, nodeThreshold: number) {
     const allChilds = [];
@@ -83,20 +83,20 @@ function NodeComponent({ children, name, totalSize, nodeID, depth, expandedNodes
                     </span>
                     <span className={styles.name}>{name}</span>
                 </div>
-                <span className={styles.size}>{(totalSize / 1024 ** 3).toFixed(1)} GiB</span>
+                <span className={styles.size}>{formatBytes(totalSize)}</span>
             </div>
             {hasChildren && isExpanded && (
                 <div>
-                    {children.map(child => 
-                    <RenderNode 
-                        key={child.node_id}
-                        methodNode={child} 
-                        depth={depth + 1} 
-                        expandedNodes={expandedNodes} 
-                        onClick={onClick} 
-                        onExpandClicked={onExpandClicked} 
-                        nodeSelection={nodeSelection}
-                        nodeThreshold={nodeThreshold} 
+                    {children.map(child =>
+                        <RenderNode
+                            key={child.node_id}
+                            methodNode={child}
+                            depth={depth + 1}
+                            expandedNodes={expandedNodes}
+                            onClick={onClick}
+                            onExpandClicked={onExpandClicked}
+                            nodeSelection={nodeSelection}
+                            nodeThreshold={nodeThreshold}
                         />
                     )}
                 </div>
@@ -116,11 +116,12 @@ interface Props {
 export function MemoryTreeView({ memoryTree, onClick, nodeSelection, nodeThreshold }: Props) {
     const [expandedNodes, setExpandedNodes] = useState<Record<number, boolean>>({});
     const selectedNodes = [...nodeSelection.selectedNodeIDs].map(i => nodeByID(memoryTree, i));
-    const totalSelectedMemory = selectedNodes.map(m => m.aggregationInfo?.totalSize ?? 0).reduce((a, b)=>a+b, 0);
+    const totalSelectedMemory = selectedNodes.map(m => m.aggregationInfo?.totalSize ?? 0).reduce((a, b) => a + b, 0);
+    const totalMemory = memoryTree.roots.map(m => m.aggregationInfo?.totalSize ?? 0).reduce((a, b) => a + b, 0);
 
     useEffect(() => {
         setExpandedNodes(prev => {
-            const next = {...prev};
+            const next = { ...prev };
             selectedNodes.forEach(v => {
                 let currentNode = v.parent;
                 while (currentNode != null) {
@@ -145,9 +146,13 @@ export function MemoryTreeView({ memoryTree, onClick, nodeSelection, nodeThresho
         <div className={styles.panel}>
             <div className={styles.header}>
                 <span>Memory tree</span>
-                {totalSelectedMemory !== undefined && (
-                    <span className={styles.headerTotal}>{(totalSelectedMemory/1024**3).toFixed(1)} GiB selected</span>
-                )}
+                {
+                    totalSelectedMemory === undefined ? (
+                        <span className={styles.headerTotal}>Total: {formatBytes(totalMemory)}</span>
+                    ) : (
+                        <span className={styles.headerTotal}>Total: {formatBytes(totalMemory)} | Selected: {formatBytes(totalSelectedMemory)}</span>
+                    )
+                }
             </div>
             <div className={styles.tree}>
                 {memoryTree.roots.filter(isMethodNode).map((n, i) => (
