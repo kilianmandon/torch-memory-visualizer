@@ -1,6 +1,6 @@
 [project]
 name = "torch-snapkit"
-version = "0.1.0"
+version = "0.1.1"
 description = "Generate PyTorch CUDA memory snapshots for torch-memory-visualizer"
 readme = "README.md"
 authors = [
@@ -21,3 +21,9 @@ snapkit-receive = "torch_snapkit.receiver:main"
 [build-system]
 requires = ["uv_build>=0.10.9,<0.12.0"]
 build-backend = "uv_build"
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
