@@ -10,7 +10,7 @@ from contextlib import ExitStack
 
 
 class memory_snapshot:
-    def __init__(self, snapshot_name, save_path:str|Path=None, on_oom:bool=True, source_root:str|Path=None, share:bool=False, share_code:str=None):
+    def __init__(self, snapshot_name, save_path:str|Path=None, on_oom:bool=True, source_root:str|Path=None, save_site_packages:bool=False, share:bool=False, share_code:str=None):
         """
         A context manager that wraps PyTorch's memory utils to record all memory events, and appends your project's 
         source code to the snapshot. With the attached source code, the snapshots can be used 
@@ -26,9 +26,11 @@ class memory_snapshot:
                 If None, the working directory will be used. Files will be saved, if they
                 - fall within source_root/**/*.py
                 - occured in the snapshot
-                - do not contain 'site-packages'
+                - do not contain 'site-packages' (if save_site_packages is False)
 
                 Defaults to None.
+            save_site_packages (bool, optional): Whether or not to include source files from the
+                site-packages folder in the snapshot. Defaults to False.
             share (bool, optional): Whether or not to provide the snapshot for peer-to-peer file sharing
                 with croc. This is for situations in which you want to download the snapshot from a cloud
                 instance to your local machine. Defaults to False.
@@ -55,6 +57,7 @@ class memory_snapshot:
             self.source_root = Path(source_root)
         else:
             self.source_root = source_root
+        self.save_site_packages = save_site_packages
 
         self.snapshot_name=snapshot_name
         self.save_path = save_path
@@ -67,6 +70,7 @@ class memory_snapshot:
         self.share_code=share_code
 
         self._ended_with_oom = False
+        self.save_current_source_code()
 
     def __enter__(self):
         self._stack = ExitStack()
@@ -124,13 +128,16 @@ class memory_snapshot:
 
 
 
-    def attach_source_code(self, data, out_file):
-        available_source_filenames = []
+    def save_current_source_code(self):
+        source_code = {}
         for path in self.source_root.glob('**/*.py'):
             filename = str(path.absolute())
-            if not 'site-packages' in filename:
-                available_source_filenames.append(filename)
+            if self.save_site_packages or 'site-packages' not in filename:
+                source_code[filename] = path.read_text()
 
+        self.source_code = source_code
+
+    def attach_source_code(self, data, out_file):
         used_source_filenames = []
 
         trace_entries = data['device_traces'][0]
@@ -140,11 +147,10 @@ class memory_snapshot:
                 files_to_analyze.add(frame['filename'])
 
         for filename in files_to_analyze:
-            if filename and Path(filename).exists():
-                if filename in available_source_filenames:
-                    used_source_filenames.append(filename)
+            if filename in self.source_code:
+                used_source_filenames.append(filename)
 
-        source_code = {filename: Path(filename).read_text() for filename in used_source_filenames}
+        source_code = {filename: self.source_code[filename] for filename in used_source_filenames}
         data['source_code'] = source_code
 
         with open(out_file, 'wb') as f:
