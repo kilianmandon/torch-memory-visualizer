@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import styles from './css/App.module.css';
 import { AllocationTimeline } from './components/AllocationTimeline'
-import type { Frame, PolygonData } from './types/base_types'
+import type { Frame, MemoryEvent, PolygonData } from './types/base_types'
 import { DropZone } from './components/DropZone'
 import { unpickleUsingJS } from './utils/pyodide'
 import { buildPolygonData, calculateTotalMemoryOverTime, extractEvents } from './utils/data_extraction'
@@ -29,15 +29,6 @@ export type SnapshotData = {
   device_traces: TraceEvent[][];
 }
 
-export interface MemoryEvent {
-  start: number,
-  end: number,
-  size: number,
-  frames: Frame[],
-  allocation_type: string,
-  address: number,
-  event_index: number,
-}
 
 export interface NodeSelection {
   selectedNodeIDs: Set<number>;
@@ -95,8 +86,10 @@ interface ButtonControlsProps {
 
 export function formatBytes(v: number) {
   if (v==0) return "0";
-  if (v >= 1024**3 / 10) return `${(v/1024**3).toFixed(1)} GiB`
-  else return `${(v/1024**2).toFixed(0)} MiB`
+  if (v >= 1024**3) return `${(v/1024**3).toFixed(1)} GiB`
+  else if (v >= 1024**2) return `${(v/1024**2).toFixed(0)} MiB`
+  else if (v >= 1024) return `${(v/1024**1).toFixed(0)} KiB`
+  else return `${v} bytes`
 }
 
 function ButtonControls({ onPeak, onSelection, onFull, onPolygonChange, onPolygonChangeCommitted, onNodeThresholdChange, numMemoryEvents, polygonCount, nodeThreshold }: ButtonControlsProps) {
@@ -152,7 +145,7 @@ function App() {
   // Show up to 15000 polys by default
   const [polygonCount, setPolygonCount] = useState<number>(15000);
   // Show nodes with at least 1 GiB in the tree view
-  const [nodeThreshold, setNodeThreshold] = useState<number>(1024);
+  const [nodeThreshold, setNodeThreshold] = useState<number>(0);
 
   const [polygonData, setPolygonData] = useState<PolygonData[] | null>(null);
   const [activeTime, setActiveTime] = useState<number | null>(null);

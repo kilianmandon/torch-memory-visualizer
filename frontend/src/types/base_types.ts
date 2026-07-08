@@ -12,6 +12,9 @@ export interface MemoryEvent {
     allocation_type: string,
     address: number,
     event_index: number,
+    dtype?: string,
+    shape?: number[],
+    func?: string,
 }
 
 export interface PolygonData {

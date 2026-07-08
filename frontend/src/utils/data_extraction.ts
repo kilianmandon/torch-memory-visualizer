@@ -1,6 +1,6 @@
 import type { Frame, MemoryEvent, PolygonData } from "../types/base_types";
 
-type TraceEvent = {
+export type TraceEvent = {
     forward_frames?: string[];
     frames: {
         filename: string;
@@ -8,18 +8,79 @@ type TraceEvent = {
         name: string;
     }[];
     size: number;
-    addr: number;
+    addr: BigInt;
     action: string;
 }
+
+export type ShapeEntry = {
+    func: string;
+    shape: number[];
+    dtype: string;
+}
+
+export type ShapeData = Map<string, ShapeEntry[]>;
 
 export type SnapshotData = {
     device_traces: TraceEvent[][];
     source_code? : Map<string, string[]>;
+    shape_data? : Map<string, ShapeEntry[]>;
 }
 
+function dtypeSizeLookup(dtype: string): number {
+    switch (dtype) {
+        case 'torch.float64':
+        case 'torch.double':
+            return 8;
+        case 'torch.float32':
+        case 'torch.float':
+            return 4;
+        case 'torch.float16':
+        case 'torch.half':
+            return 2;
+        case 'torch.bfloat16':
+            return 2;
 
+        case 'torch.complex128':
+            return 16; 
+        case 'torch.complex64':
+            return 8; 
 
-function extractEvent(trace_event: TraceEvent, start: number, end: number, event_index: number): MemoryEvent {
+        case 'torch.int64':
+        case 'torch.long':
+            return 8;
+        case 'torch.int32':
+        case 'torch.int':
+            return 4;
+        case 'torch.int16':
+        case 'torch.short':
+            return 2;
+        case 'torch.int8':
+        case 'torch.char':
+            return 1;
+
+        case 'torch.uint8':
+        case 'torch.byte':
+            return 1;
+        case 'torch.uint16':
+            return 2;
+        case 'torch.uint32':
+            return 4;
+        case 'torch.uint64':
+            return 8;
+
+        case 'torch.bool':
+            return 1;
+
+        default:
+            throw new Error(`Unknown dtype: ${dtype}`);
+    }
+}
+
+function checkConsistency(traceEvent: TraceEvent, shapeEntry: ShapeEntry) {
+    return traceEvent.size == dtypeSizeLookup(shapeEntry.dtype) * shapeEntry.shape.reduce((a,b)=>a*b, 1);
+}
+
+function extractEvent(trace_event: TraceEvent, start: number, end: number, event_index: number, shapeData: ShapeData|null): MemoryEvent {
     let frames: Frame[] = [];
     let forwardFrames: Frame[] = [];
 
@@ -43,9 +104,18 @@ function extractEvent(trace_event: TraceEvent, start: number, end: number, event
         frames.push({filename: frame.filename, lineno: frame.line-1, name: frame.name})
     }
 
-    frames = [...forwardFrames.reverse(), ...frames]
-        
-    return {
+    if (forwardFrames && forwardFrames.length>0) {
+        forwardFrames.reverse();
+        frames = [...frames, ...forwardFrames];
+        frames.push({
+            filename: "backward_frame",
+            lineno: 0,
+            name: "unknown"
+        });
+        console.warn("inserting backward_frame");
+    }
+
+    let out: MemoryEvent = {
         start, end,
         size: trace_event.size,
         address: trace_event.addr,
@@ -53,6 +123,21 @@ function extractEvent(trace_event: TraceEvent, start: number, end: number, event
         frames,
         event_index,
     }
+
+    if (shapeData) {
+        const key = `0x${trace_event.addr.toString(16)}`;
+        const data = shapeData.get(key) ?? [];
+        if (data.length > 0) {
+            let entry = data[0];
+            if (checkConsistency(trace_event, entry)) {
+                out.dtype = entry.dtype;
+                out.func = entry.func;
+                out.shape = entry.shape;
+            }
+        }
+    }
+
+    return out;
 }
 
 export function extractEvents(snapshotData: SnapshotData) : MemoryEvent[] {
@@ -61,6 +146,8 @@ export function extractEvents(snapshotData: SnapshotData) : MemoryEvent[] {
     const memoryAddrToIndexMap = new Map<number, number>();
     const events: MemoryEvent[] = [];
     let currentCounter = 0;
+    let shapeData = snapshotData.shape_data ? structuredClone(snapshotData.shape_data) : null;
+    console.log(shapeData);
 
 
     for (const [index, traceEvent] of traceEvents.entries()) {
@@ -70,7 +157,7 @@ export function extractEvents(snapshotData: SnapshotData) : MemoryEvent[] {
                 console.assert(events[lastIndex].end<maxIndex, "Address reused before it was freed.");
             }
             memoryAddrToIndexMap.set(traceEvent.addr, currentCounter);
-            events.push(extractEvent(traceEvent, index, maxIndex, currentCounter));
+            events.push(extractEvent(traceEvent, index, maxIndex, currentCounter, shapeData));
             currentCounter += 1;
         } else if (traceEvent.action === "free_completed") {
             const lastIndex = memoryAddrToIndexMap.get(traceEvent.addr);
@@ -79,6 +166,18 @@ export function extractEvents(snapshotData: SnapshotData) : MemoryEvent[] {
                 events[lastIndex].end = index;
             }
         }
+    }
+
+    if (shapeData) {
+        let leftoverCount = 0;
+        for (let [, v] of Object.entries(shapeData)) {
+            if (v.length > 0) {
+                leftoverCount += v.length;
+            }
+        }
+        console.log(`Number of logged shapes that were assigned to no memory event: ${leftoverCount}`);
+        let tracedShapesCount = events.map(x => x.dtype ? 1 : 0).reduce((a:number,b:number)=>a+b, 0);
+        console.log(`Events with assigned shape: ${tracedShapesCount} out of ${events.length}`);
     }
 
     return events;

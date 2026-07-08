@@ -1,4 +1,5 @@
 .panel {
+  position: relative;
   text-align: left;
   height: 50vh;
   background: var(--bg-elevated);

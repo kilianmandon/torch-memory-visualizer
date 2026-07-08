@@ -1,6 +1,6 @@
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.mjs";
 import type { PyodideInterface } from "pyodide";
-import type { SnapshotData } from "./data_extraction";
+import type { ShapeEntry, SnapshotData, TraceEvent } from "./data_extraction";
 import { unpickleData } from "./unpickle.js";
 
 let pyodide: PyodideInterface = null;
@@ -20,6 +20,9 @@ export async function getPyodide() {
 export async function unpickleUsingJS(file: File): Promise<SnapshotData> {
     const buffer = await file.arrayBuffer();
     const obj = unpickleData(buffer);
+    obj.device_traces.forEach((device_trace: TraceEvent[]) => {
+        device_trace.forEach((e: TraceEvent) => e.addr = BigInt(e.addr))
+    });
     if (obj.source_code) {
         const codeMap = new Map<string, string[]>();
         for (const [filename, sourcecode] of Object.entries(obj.source_code)) {
@@ -27,6 +30,18 @@ export async function unpickleUsingJS(file: File): Promise<SnapshotData> {
         }
         obj.source_code = codeMap;
     }
+    if (obj.shape_data) {
+        const shapeMap = new Map<string, ShapeEntry[]>();
+        for (const [addr, data] of Object.entries(obj.shape_data)) {
+            shapeMap.set(addr, data.map((vs)=>({
+                func: vs[0],
+                shape: vs[1],
+                dtype: vs[2],
+            })));
+        }
+        obj.shape_data = shapeMap;
+    }
+    console.error(typeof obj.device_traces[0][0].addr);
     return obj as SnapshotData;
 }
 

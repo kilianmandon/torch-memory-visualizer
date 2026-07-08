@@ -160,7 +160,9 @@ export function unpickleData(buffer) {
             for (let i = s; i < 8; i++) {
               scratch_bytes[i] = fill;
             }
+            // Overwritten: Always do BigInt
             stack.push(Number(big[0]));
+            // stack.push(BigInt(big[0]));
           } else { // BigInt
             let scratch_bytes_unbounded = [];
             for (let i = 0; i < s; i++) {

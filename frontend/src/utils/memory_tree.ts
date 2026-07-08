@@ -88,6 +88,14 @@ export async function parseMemoryTree(events: MemoryEvent[], sca: SourceCodeAnal
                     const context = sca.fileAnalysis.get(frame.filename)!.contextByLine[frame.lineno];
                     if (!context) console.warn(`Missing context in ${frame.filename}:${frame.lineno}`, sca.fileAnalysis.get(frame.filename)!.file[frame.lineno]);
                     contextStack.push(context);
+                } else if (frame.filename == "backward_frame") {
+                    contextStack.push({
+                        filename: '',
+                        funcContext: '<backward>',
+                        lineno: 0,
+                        linenoStart: 0,
+                        linenoEnd: 1,
+                    });
                 }
             }
             else {

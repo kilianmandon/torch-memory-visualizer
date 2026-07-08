@@ -176,7 +176,7 @@ function HoveredInfo({hovered, nodeSelection, totalMemoryOverTime}: {hovered: Me
         const userFrameBlacklist = ['site-packages', '/tmp', '/usr/lib', '??', '<frozen runpy>', '.cpp']
         const userFrames = selectedEvent.frames?.filter(frame => !userFrameBlacklist.some(x => frame.filename.includes(x)) && frame.filename.length>0);
         const stacktraceSummary = (userFrames && userFrames.length > 0) ? ` | ${userFrames.at(-1)?.filename}:${userFrames.at(0)?.lineno}` : "";
-        fullString = `Address ${addr} | Size ${formatBytes(size)} | Total size after ${formatBytes(totalAfter)}${stacktraceSummary}`;
+        fullString = `Address 0x${addr.toString(16)} | Size ${formatBytes(size)} | Total size after ${formatBytes(totalAfter)}${stacktraceSummary}`;
     }
     
     return <p style={{ margin: 0, height: '20px', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text-dim)' }}>{fullString}</p>

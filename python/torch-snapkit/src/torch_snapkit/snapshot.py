@@ -5,12 +5,13 @@ import pickle
 import shutil
 
 import torch
+from torch.utils._python_dispatch import TorchDispatchMode
 from pathlib import Path
 from contextlib import ExitStack
 
 
 class memory_snapshot:
-    def __init__(self, snapshot_name, save_path:str|Path=None, on_oom:bool=True, source_root:str|Path=None, save_site_packages:bool=False, share:bool=False, share_code:str=None):
+    def __init__(self, snapshot_name, save_path:str|Path=None, on_oom:bool=True, log_shapes:bool=False, source_root:str|Path=None, save_site_packages:bool=False, share:bool=False, share_code:str=None):
         """
         A context manager that wraps PyTorch's memory utils to record all memory events, and appends your project's 
         source code to the snapshot. With the attached source code, the snapshots can be used 
@@ -29,6 +30,8 @@ class memory_snapshot:
                 - do not contain 'site-packages' (if save_site_packages is False)
 
                 Defaults to None.
+            log_shapes (bool, optional): If True, attaches a TorchDispatchMode that logs address, shapes, and dtype
+                of all operations. Defaults to False.
             save_site_packages (bool, optional): Whether or not to include source files from the
                 site-packages folder in the snapshot. Defaults to False.
             share (bool, optional): Whether or not to provide the snapshot for peer-to-peer file sharing
@@ -68,6 +71,7 @@ class memory_snapshot:
         self.on_oom=on_oom
         self.share=share
         self.share_code=share_code
+        self.log_shapes = log_shapes
 
         self._ended_with_oom = False
         self.save_current_source_code()
@@ -75,6 +79,8 @@ class memory_snapshot:
     def __enter__(self):
         self._stack = ExitStack()
         self.tempdir = self._stack.enter_context(TemporaryDirectory())
+        if self.log_shapes:
+            self.shape_logger = self._stack.enter_context(ShapeLogger())
         torch.cuda.memory._record_memory_history()
 
         if self.on_oom:
@@ -99,6 +105,9 @@ class memory_snapshot:
                     out_path = self.save_path
                 else:
                     out_path = self.tempdir + f'/{self.snapshot_name}_snapshot.pkl'
+
+                if self.log_shapes:
+                    data['shape_data'] = self.shape_logger.logs
 
                 self.attach_source_code(data, out_path)
 
@@ -165,3 +174,18 @@ class memory_snapshot:
             self._ended_with_oom = True
 
         torch._C._cuda_attach_out_of_memory_observer(oom_observer)
+
+
+class ShapeLogger(TorchDispatchMode):
+    def __init__(self):
+        self.logs = {}
+
+    def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        kwargs = kwargs or {}
+        result = func(*args, **kwargs)
+        if isinstance(result, torch.Tensor) and result.is_cuda:
+            k = hex(result.data_ptr())
+            if k not in self.logs:
+                self.logs[k] = []
+            self.logs[k].append([str(func), tuple(result.shape), str(result.dtype)])
+        return result

@@ -2,8 +2,9 @@ import { formatBytes, nodeByID, type NodeSelection } from "../App";
 import type { MemoryTree, MethodNode, SourceCodeAnalysis } from "../types/memory_tree_types";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import { a11yDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import styles from "../css/CodeView.module.css";
+import ShapeDisplay from "./ShapeDisplay";
 
 interface Props {
     nodeSelection: NodeSelection;
@@ -15,6 +16,7 @@ export function CodeView({ nodeSelection, sourceCodeAnalysis, memoryTree }: Prop
     const filename = activeNode?.filename;
     const preRef = useRef<HTMLElement>(null);
     const [sourcecodeLines, setSourcecodeLines] = useState<string[] | null>(null);
+    const [hovered, setHovered] = useState<number|null>(null);
 
     useLayoutEffect(() => {
         // requestAnimationFrame(() => {
@@ -25,11 +27,11 @@ export function CodeView({ nodeSelection, sourceCodeAnalysis, memoryTree }: Prop
         const selectedLine = nodeSelection.activeLine ? nodeSelection.activeLine + funcLineStart : null;
 
 
-        let goTo = (selectedLine && funcLineStart && selectedLine > funcLineStart + 4) ? selectedLine - 4 : funcLineStart - 2
+        let goTo = (selectedLine && funcLineStart && selectedLine > funcLineStart + 6) ? selectedLine - 8 : funcLineStart - 8
         if (!codeLines) return;
         goTo = Math.max(0, Math.min(goTo, codeLines.length - 1));
         if (codeLines && goTo) {
-            const offset = codeLines[goTo].offsetTop - preRef.current.getBoundingClientRect().top;
+            const offset = codeLines[goTo].offsetTop; // - preRef.current.getBoundingClientRect().top;
             preRef.current.scrollTo({ top: offset });
             // codeLines[goTo].scrollIntoView({behavior: "smooth"})
         }
@@ -57,13 +59,24 @@ export function CodeView({ nodeSelection, sourceCodeAnalysis, memoryTree }: Prop
 
     const lineProps = (lineNumber: number) => {
         let style = { display: 'block' };
-        if (!activeNode || !nodeSelection.activeLine) return { style };
-        const activeLine = nodeSelection.activeLine + activeNode.lineno_start;
-        if (nodeSelection.activeLine != null && lineNumber - 1 == activeLine) {
-            style.backgroundColor = 'var(--line-highlight)';
+        if (!activeNode) return {style};
+        const currentLine = lineNumber - 1 - activeNode.lineno_start;
+        const out = { style, onMouseEnter: ()=>setHovered(currentLine), onMouseLeave: ()=>setHovered(null) };
+        if (nodeSelection.activeLine && nodeSelection.activeLine != null && currentLine == nodeSelection.activeLine) {
+            out.style.backgroundColor = 'var(--line-highlight)';
         }
-        return { style };
+        return out
     }
+
+    if (hovered) {
+        console.log(`Hovered ${hovered}`);
+    }
+    console.log("Rerendering.") 
+
+    const PreTag = useCallback(
+        (props) => <pre className={styles.codewrapper} ref={preRef} {...props} />,
+        [] 
+    );
 
 
     return <article className={styles.panel}>
@@ -71,7 +84,7 @@ export function CodeView({ nodeSelection, sourceCodeAnalysis, memoryTree }: Prop
             <>
                 <div className={styles.filename}>{filename}</div>
                 <SyntaxHighlighter
-                    PreTag={(props) => <pre className={styles.codewrapper} ref={preRef} {...props}></pre>}
+                    PreTag={PreTag}
                     language="python"
                     style={a11yDark}
                     wrapLines
@@ -81,6 +94,8 @@ export function CodeView({ nodeSelection, sourceCodeAnalysis, memoryTree }: Prop
                 >
                     {sourcecodeLines.join("\n")}
                 </SyntaxHighlighter>
+                {hovered && 
+                <ShapeDisplay nodes={activeNode?.lines[hovered] ?? []}/>}
             </>
         }
     </article>;
