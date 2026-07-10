@@ -9,11 +9,11 @@ import type { MemoryTree } from "../types/memory_tree_types";
 interface Props {
     nodeSelection: NodeSelection;
     polygonData: PolygonData[];
-    onSelect: (events: MemoryEvent[], t: number)=>void;
+    onSelect: (events: MemoryEvent[], t: number) => void;
     totalMemoryOverTime: number[];
     memoryEvents: MemoryEvent[];
-    activeTime: number|null;
-    memoryTree: MemoryTree|null;
+    activeTime: number | null;
+    memoryTree: MemoryTree | null;
 }
 
 const darkThemePalette = [
@@ -30,14 +30,14 @@ const darkThemePalette = [
 ];
 
 function hashCode(num: number) {
-  const numStr = num.toString();
-  let hash = 0;
-  for (let i = 0; i < numStr.length; i++) {
-    const charCode = numStr.charCodeAt(i);
-    hash = (hash << 5) - hash + charCode;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  return hash;
+    const numStr = num.toString();
+    let hash = 0;
+    for (let i = 0; i < numStr.length; i++) {
+        const charCode = numStr.charCodeAt(i);
+        hash = (hash << 5) - hash + charCode;
+        hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash;
 }
 
 interface PolygonCanvasProps {
@@ -48,7 +48,7 @@ interface PolygonCanvasProps {
     onMouseclick: (coords: number[], d: PolygonData) => void;
     onMouseclickClear: (coords: number[]) => void;
     totalMemoryOverTime: number[];
-    activeTime: number|null;
+    activeTime: number | null;
 }
 
 interface CanvasData {
@@ -60,8 +60,8 @@ interface CanvasData {
     zoomGroup: object;
 }
 
-function createPolygonCanvas({canvasDiv, polygonData, onMouseover, onMouseleave, onMouseclick, onMouseclickClear, totalMemoryOverTime, activeTime}: PolygonCanvasProps) {
-    const displayedMemoryOverTime = calculateTotalMemoryOverTime(polygonData.map(e=>e.event));
+function createPolygonCanvas({ canvasDiv, polygonData, onMouseover, onMouseleave, onMouseclick, onMouseclickClear, totalMemoryOverTime, activeTime }: PolygonCanvasProps) {
+    const displayedMemoryOverTime = calculateTotalMemoryOverTime(polygonData.map(e => e.event));
     const container = d3.select(canvasDiv);
     container.selectAll('*').remove();
 
@@ -74,7 +74,7 @@ function createPolygonCanvas({canvasDiv, polygonData, onMouseover, onMouseleave,
     const plotHeight = height - bottomPad;
 
     const xmax = d3.max(polygonData, d => d3.max(d.coords.map(p => p[0])));
-    const ymax = totalMemoryOverTime.reduce((a,b)=>Math.max(a, b), -Infinity) * 1.3;
+    const ymax = totalMemoryOverTime.reduce((a, b) => Math.max(a, b), -Infinity) * 1.3;
 
     const xScale = d3.scaleLinear().domain([0, xmax]).range([0, plotWidth]);
     const yScale = d3.scaleLinear().domain([0, ymax]).range([plotHeight, 0]);
@@ -145,9 +145,9 @@ function createPolygonCanvas({canvasDiv, polygonData, onMouseover, onMouseleave,
 
     plotOuter.on('wheel', (event) => {
         event.preventDefault();
-    }, {passive: false});
+    }, { passive: false });
 
-    const yAxis = d3.axisLeft(yScale).tickFormat(d => `${(d/1024**3).toFixed(1)} GiB`);
+    const yAxis = d3.axisLeft(yScale).tickFormat(d => `${(d / 1024 ** 3).toFixed(1)} GiB`);
     const axisG = plotCoordinateSpace.append('g').call(yAxis);
 
     const handleZoom = (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
@@ -165,7 +165,7 @@ function createPolygonCanvas({canvasDiv, polygonData, onMouseover, onMouseleave,
     return { polygonRefs: polygons, xMax: xmax, yMax: ymax, plotWidth, plotHeight, zoomGroup };
 }
 
-function HoveredInfo({hovered, nodeSelection, totalMemoryOverTime}: {hovered: MemoryEvent|null, nodeSelection: NodeSelection, totalMemoryOverTime: number[] }) {
+function HoveredInfo({ hovered, nodeSelection, totalMemoryOverTime }: { hovered: MemoryEvent | null, nodeSelection: NodeSelection, totalMemoryOverTime: number[] }) {
     const selectedEvent = nodeSelection?.activeEvent || hovered;
     let fullString;
     if (!selectedEvent) fullString = "";
@@ -174,11 +174,11 @@ function HoveredInfo({hovered, nodeSelection, totalMemoryOverTime}: {hovered: Me
         const addr = selectedEvent.address;
         const totalAfter = totalMemoryOverTime[selectedEvent.start];
         const userFrameBlacklist = ['site-packages', '/tmp', '/usr/lib', '??', '<frozen runpy>', '.cpp']
-        const userFrames = selectedEvent.frames?.filter(frame => !userFrameBlacklist.some(x => frame.filename.includes(x)) && frame.filename.length>0);
+        const userFrames = selectedEvent.frames?.filter(frame => !userFrameBlacklist.some(x => frame.filename.includes(x)) && frame.filename.length > 0);
         const stacktraceSummary = (userFrames && userFrames.length > 0) ? ` | ${userFrames.at(-1)?.filename}:${userFrames.at(0)?.lineno}` : "";
         fullString = `Address 0x${addr.toString(16)} | Size ${formatBytes(size)} | Total size after ${formatBytes(totalAfter)}${stacktraceSummary}`;
     }
-    
+
     return <p style={{ margin: 0, height: '20px', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text-dim)' }}>{fullString}</p>
 }
 
@@ -187,8 +187,8 @@ export function AllocationTimeline(
     { nodeSelection, polygonData, onSelect, totalMemoryOverTime, memoryEvents, activeTime, memoryTree }: Props
 ) {
     const [hovered, setHovered] = useState<MemoryEvent | null>(null);
-    const [canvasData, setCanvasData] = useState<CanvasData|null>(null);
-    const [activeLine, setActiveLine] = useState<object|null>(null);
+    const [canvasData, setCanvasData] = useState<CanvasData | null>(null);
+    const [activeLine, setActiveLine] = useState<object | null>(null);
     const [selected, setSelected] = useState(new Set<number>());
 
     const canvasRef = useRef<HTMLDivElement>(null);
@@ -201,7 +201,7 @@ export function AllocationTimeline(
     const onMouseclick = useEffectEvent(([x, y]: number[], d) => {
         if (!canvasData) return;
         let t = Math.round(x / canvasData.plotWidth * canvasData.xMax);
-        
+
         onSelect([memoryEvents[d.event.event_index]], t);
     });
     const onMouseclickClear = useEffectEvent(([x, y]: number[]) => {
@@ -251,10 +251,17 @@ export function AllocationTimeline(
 
     useEffect(() => {
         if (!canvasRef.current) return;
-        
-        let canvasData = createPolygonCanvas({canvasDiv: canvasRef.current, polygonData, onMouseover, onMouseleave, onMouseclick, onMouseclickClear, totalMemoryOverTime, activeTime});
+
+        let canvasData = createPolygonCanvas({ canvasDiv: canvasRef.current, polygonData, onMouseover, onMouseleave, onMouseclick, onMouseclickClear, totalMemoryOverTime, activeTime });
         setCanvasData(canvasData);
-        
+
+        return () => {
+            if (canvasRef.current) {
+                d3.select(canvasRef.current).selectAll('*').remove();
+            }
+            setCanvasData(null);
+        };
+
     }, [polygonData]);
 
     useEffect(() => {
@@ -263,7 +270,7 @@ export function AllocationTimeline(
             setSelected(new Set([nodeSelection.activeEvent.event_index]));
             return;
         }
-        let selectedNodes = [...nodeSelection.selectedNodeIDs].map(i=>nodeByID(memoryTree, i))
+        let selectedNodes = [...nodeSelection.selectedNodeIDs].map(i => nodeByID(memoryTree, i))
 
         const totalSelection = new Set<number>();
         for (let methodNode of selectedNodes) {
@@ -276,29 +283,29 @@ export function AllocationTimeline(
 
     }, [nodeSelection])
     useEffect(() => {
-        if (!canvasData || !canvasData.polygonRefs) return; 
+        if (!canvasData || !canvasData.polygonRefs) return;
 
-        canvasData.polygonRefs.each(function(d, i) {
+        canvasData.polygonRefs.each(function (d, i) {
             const isSelected = selected.has(d.event.event_index);
-            const highlight = isSelected|| d.event.event_index === hovered?.event_index;
+            const highlight = isSelected || d.event.event_index === hovered?.event_index;
             const selectedOpacity = 1.0;
-            const unselectedOpacity = (selected.size>0) ? 0.7 : 1.0;
+            const unselectedOpacity = (selected.size > 0) ? 0.7 : 1.0;
             d3.select(this)
-                .attr('stroke', _ => highlight ? (isSelected? 'var(--accent)' : 'var(--text)' ): null)
-                .attr('fill', () => isSelected ? 'var(--accent)' : darkThemePalette[Math.abs(hashCode(d.event.address))%darkThemePalette.length])
+                .attr('stroke', _ => highlight ? (isSelected ? 'var(--accent)' : 'var(--text)') : null)
+                .attr('fill', () => isSelected ? 'var(--accent)' : darkThemePalette[Math.abs(hashCode(d.event.address)) % darkThemePalette.length])
                 .attr('stroke-width', _ => highlight ? '1.5px' : null)
-                .attr('opacity', () => isSelected? selectedOpacity: unselectedOpacity);
-                // .attr('vector-effect', _ => highlight ? 'non-scaling-stroke' : null);
+                .attr('opacity', () => isSelected ? selectedOpacity : unselectedOpacity);
+            // .attr('vector-effect', _ => highlight ? 'non-scaling-stroke' : null);
         })
     }, [selected, hovered, canvasData])
 
 
     return (
-        <div style={{ display: 'flex', width: '100%', flexDirection: 'column', padding: '12px', paddingBottom: '0px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--bg-elevated)', marginBottom: 'var(--space-3)', height: '100%'}}>
+        <div style={{ display: 'flex', width: '100%', flexDirection: 'column', padding: '12px', paddingBottom: '0px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--bg-elevated)', marginBottom: 'var(--space-3)', height: '100%' }}>
             <div ref={canvasRef} style={{ width: '100%', height: '100%', marginBottom: 0 }}>
             </div>
-            <hr style={{ border: '0', borderTop: '1px solid var(--border)', width: '100%' }}/>
-            <HoveredInfo hovered={hovered} nodeSelection={nodeSelection} totalMemoryOverTime={totalMemoryOverTime}/>
+            <hr style={{ border: '0', borderTop: '1px solid var(--border)', width: '100%' }} />
+            <HoveredInfo hovered={hovered} nodeSelection={nodeSelection} totalMemoryOverTime={totalMemoryOverTime} />
         </div>
     );
 }

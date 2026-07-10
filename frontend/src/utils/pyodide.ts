@@ -1,6 +1,6 @@
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.mjs";
 import type { PyodideInterface } from "pyodide";
-import type { ShapeEntry, SnapshotData, TraceEvent } from "./data_extraction";
+import type { ShapeData, ShapeEntry, SnapshotData, TraceEvent } from "./data_extraction";
 import { unpickleData } from "./unpickle.js";
 
 let pyodide: PyodideInterface = null;
@@ -10,16 +10,16 @@ export async function getPyodide() {
     // pyodide = await loadPyodide();
     pyodide = await loadPyodide({
 
-            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/"
+        indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/"
 
-        });
+    });
     await pyodide.loadPackage("orjson");
     return pyodide;
 }
 
-export async function unpickleUsingJS(file: File): Promise<SnapshotData> {
+export async function unpickleUsingJS(file: File, progressCallback: (p: number) => void): Promise<SnapshotData> {
     const buffer = await file.arrayBuffer();
-    const obj = unpickleData(buffer);
+    const obj = await unpickleData(buffer, progressCallback);
     obj.device_traces.forEach((device_trace: TraceEvent[]) => {
         device_trace.forEach((e: TraceEvent) => e.addr = BigInt(e.addr))
     });
@@ -31,15 +31,18 @@ export async function unpickleUsingJS(file: File): Promise<SnapshotData> {
         obj.source_code = codeMap;
     }
     if (obj.shape_data) {
-        const shapeMap = new Map<string, ShapeEntry[]>();
-        for (const [addr, data] of Object.entries(obj.shape_data)) {
-            shapeMap.set(addr, data.map((vs)=>({
-                func: vs[0],
-                shape: vs[1],
-                dtype: vs[2],
-            })));
+        const shapeDataList: ShapeData[] = obj.shape_data;
+        const shapeMaps = new Array(shapeDataList.length).map(_ => new Map<string, ShapeEntry[]>());
+        for (const [index, shapeData] of shapeDataList.entries()) {
+            for (const [addr, data] of Object.entries(shapeData)) {
+                shapeMaps[index].set(addr, data.map((vs) => ({
+                    func: vs[0],
+                    shape: vs[1],
+                    dtype: vs[2],
+                })));
+            }
         }
-        obj.shape_data = shapeMap;
+        obj.shape_data = shapeMaps;
     }
     console.error(typeof obj.device_traces[0][0].addr);
     return obj as SnapshotData;
@@ -80,11 +83,11 @@ res
 }
 
 export async function pythonSourceCodeAnalysis(filename: string, sourceCode: string[]) {
-    const data = JSON.stringify({filename, sourceCode});
+    const data = JSON.stringify({ filename, sourceCode });
     const py = await getPyodide();
     py.globals.set('data_str', data);
     const result = await py.runPythonAsync(
-`
+        `
 import ast
 import json
 import orjson
@@ -138,7 +141,7 @@ for i in range(len(source_code)):
 
 orjson.dumps(context_list).decode('utf-8')
 `
-)
+    )
     return JSON.parse(result as string);
 
 }

@@ -1,7 +1,7 @@
 // Code from the PyTorch repo:
 // pytorch/torch/utils/viz/MemoryViz.js
 
-export function unpickleData(buffer) {
+export async function unpickleData(buffer, progressCallback) {
   const bytebuffer = new Uint8Array(buffer);
   const decoder = new TextDecoder();
 
@@ -78,7 +78,19 @@ export function unpickleData(buffer) {
     stack.splice(mark, Infinity);
   }
 
+  let progress = 0;
+  let loopCount = 0;
+
   while (true) {
+    loopCount++;
+    if (loopCount % 1000000 == 0) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      let newProgress = Math.floor((offset / bytebuffer.length) * 100);
+      if (newProgress > progress) {
+        progress = newProgress;
+        progressCallback(progress);
+      }
+    }
     const opcode = bytebuffer[offset++];
     switch (opcode) {
       case PROTO:

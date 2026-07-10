@@ -5,6 +5,7 @@ import pickle
 import shutil
 
 import torch
+import torch.distributed
 from torch.utils._python_dispatch import TorchDispatchMode
 from pathlib import Path
 from contextlib import ExitStack
@@ -98,21 +99,33 @@ class memory_snapshot:
                 else:
                     data = self._oom_snapshot
 
-                assert 'device_traces' in data, 'No device traces recorded.'
-                assert len(data['device_traces'][0]) > 0, 'No memory events recorded in device trace.'
-
-                if self.save_path is not None:
-                    out_path = self.save_path
-                else:
-                    out_path = self.tempdir + f'/{self.snapshot_name}_snapshot.pkl'
-
                 if self.log_shapes:
-                    data['shape_data'] = self.shape_logger.logs
+                    data['shape_data'] = [self.shape_logger.logs]
 
-                self.attach_source_code(data, out_path)
+                assert 'device_traces' in data, 'No device traces recorded.'
+                distributed = (torch.distributed.is_available() and torch.distributed.is_initialized())
+                rank = 0 if not distributed else torch.distributed.get_rank()
 
-                if self.share:
-                    self.share_snapshot(out_path)
+                if distributed:
+                    world_size = torch.distributed.get_world_size()
+                    all_data = [None for _ in range(world_size)]
+                    torch.distributed.gather_object(data, all_data, dst=0)
+
+                    if rank==0:
+                        data['device_traces'] = [all_data[i]['device_traces'][i] for i in range(world_size)]
+                        data['shape_data'] = [all_data[i]['shape_data'][0] for i in range(world_size)]
+
+                
+                if rank==0:
+                    if self.save_path is not None:
+                        out_path = self.save_path
+                    else:
+                        out_path = self.tempdir + f'/{self.snapshot_name}_snapshot.pkl'
+
+                    self.attach_source_code(data, out_path)
+
+                    if self.share:
+                        self.share_snapshot(out_path)
         finally:
             self._stack.close()
             torch.cuda.memory._record_memory_history(enabled=None)

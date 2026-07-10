@@ -93,3 +93,28 @@ button:active {
   background: var(--border);
   margin: var(--space-2) 0;
 }
+
+.selectRow {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.selectRow select {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.selectRow select:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+}

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import styles from './css/App.module.css';
 import { AllocationTimeline } from './components/AllocationTimeline'
-import type { Frame, MemoryEvent, PolygonData } from './types/base_types'
+import type { MemoryEvent, PolygonData } from './types/base_types'
 import { DropZone } from './components/DropZone'
 import { unpickleUsingJS } from './utils/pyodide'
-import { buildPolygonData, calculateTotalMemoryOverTime, extractEvents } from './utils/data_extraction'
+import { buildPolygonData, calculateTotalMemoryOverTime, extractEvents, type SnapshotData } from './utils/data_extraction'
 import { aggregateInfo, parseMemoryTree, pruneMemoryTreeByTime, pruneMemoryTreeToEvents, setupSourceCodeAnalysis, walkAllNodes } from './utils/memory_tree'
 import { MemoryTreeView } from './components/MemoryTreeView'
 import { isMethodNode, type AllocationNode, type MemoryTree, type MethodNode, type SourceCodeAnalysis, type TreeNode } from './types/memory_tree_types'
@@ -13,21 +13,6 @@ import { Group, Panel } from 'react-resizable-panels';
 import Placeholder from './components/Placeholder';
 import Header from './components/Header';
 
-type TraceEvent = {
-  forward_frames?: string[];
-  frames: {
-    filename: string;
-    line: number;
-    name: string;
-  }[];
-  size: number;
-  addr: number;
-  action: string;
-}
-
-export type SnapshotData = {
-  device_traces: TraceEvent[][];
-}
 
 
 export interface NodeSelection {
@@ -43,34 +28,6 @@ export interface ProcessedSnapshotData {
 }
 
 
-async function processSnapshotFile(file: File): Promise<ProcessedSnapshotData> {
-  // let snapshotData = await unpickle(file);
-  let snapshotData = await unpickleUsingJS(file);
-  // snapshotData.device_traces = [snapshotData.device_traces[0].slice(0, 100000)];
-  let memoryData = extractEvents(snapshotData);
-  // memoryData = [
-  //   {
-  //     start: 0, end: 400, size: 1024*1024, event_index: 0, frames: [], allocation_type: "unknown", address:0
-  //   },
-
-  //   {
-  //     start: 100, end: 500, size: 1024*1024, event_index: 1, frames: [], allocation_type: "unknown", address:1
-  //   },
-  // ];
-  // memoryData = [...Array(10).keys()].map(i=>({
-  //      start: 100*i, end: 2000, size: 1024*1024, event_index: i, frames: [], allocation_type: "unknown", address:i
-  // }))
-  let out: ProcessedSnapshotData = {
-    events: memoryData,
-  }
-  let sca = null;
-  if (snapshotData.source_code) {
-    sca = await setupSourceCodeAnalysis(snapshotData.source_code);
-    out.sourceCodeAnalysis = sca;
-  }
-
-  return out;
-}
 
 interface ButtonControlsProps {
   onPeak: () => void;
@@ -82,17 +39,20 @@ interface ButtonControlsProps {
   nodeThreshold: number;
   onNodeThresholdChange: (x: number) => void;
   numMemoryEvents: number;
+  selectedDevice: number;
+  numDevices: number;
+  onDeviceChange: (i: number)=>void;
 }
 
 export function formatBytes(v: number) {
-  if (v==0) return "0";
-  if (v >= 1024**3) return `${(v/1024**3).toFixed(1)} GiB`
-  else if (v >= 1024**2) return `${(v/1024**2).toFixed(0)} MiB`
-  else if (v >= 1024) return `${(v/1024**1).toFixed(0)} KiB`
+  if (v == 0) return "0";
+  if (v >= 1024 ** 3) return `${(v / 1024 ** 3).toFixed(1)} GiB`
+  else if (v >= 1024 ** 2) return `${(v / 1024 ** 2).toFixed(0)} MiB`
+  else if (v >= 1024) return `${(v / 1024 ** 1).toFixed(0)} KiB`
   else return `${v} bytes`
 }
 
-function ButtonControls({ onPeak, onSelection, onFull, onPolygonChange, onPolygonChangeCommitted, onNodeThresholdChange, numMemoryEvents, polygonCount, nodeThreshold }: ButtonControlsProps) {
+function ButtonControls({ onPeak, onSelection, onFull, onPolygonChange, onPolygonChangeCommitted, onNodeThresholdChange, numMemoryEvents, polygonCount, nodeThreshold, selectedDevice, numDevices, onDeviceChange }: ButtonControlsProps) {
 
   return (
     <div className={styles.controls}>
@@ -103,6 +63,19 @@ function ButtonControls({ onPeak, onSelection, onFull, onPolygonChange, onPolygo
         <button onClick={onPeak}>Peak</button>
         <button onClick={onSelection}>Selection</button>
         <button onClick={onFull}>Full Trace</button>
+      </div>
+      <div className={styles.selectRow}>
+        <label>Device</label>
+        <select
+          value={selectedDevice}
+          onChange={(e) => onDeviceChange(Number(e.target.value))}
+        >
+          {Array.from({ length: numDevices }, (_, i) => (
+            <option key={i} value={i}>
+              Device {i}
+            </option>
+          ))}
+        </select>
       </div>
       <div className={styles.sliderRow}>
         <label>Polygons</label>
@@ -127,7 +100,7 @@ function ButtonControls({ onPeak, onSelection, onFull, onPolygonChange, onPolygo
           value={nodeThreshold}
           onChange={(e) => onNodeThresholdChange(Number(e.target.value))}
         />
-        <span>{formatBytes(nodeThreshold * 1024**2)}</span>
+        <span>{formatBytes(nodeThreshold * 1024 ** 2)}</span>
       </div>
     </div>
   )
@@ -142,6 +115,10 @@ export function nodeByID(memoryTree: MemoryTree, id: number): TreeNode {
 
 function App() {
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
+  const [snapshotLoadingProgress, setSnapshotLoadingProgress] = useState(0)
+  const [memoryTreeBuildingProgress, setMemoryTreeBuildingProgress] = useState(0);
+  const [snapshotData, setSnapshotData] = useState<SnapshotData|null>(null);
+  const [selectedDevice, setSelectedDevice] = useState<number>(0);
   // Show up to 15000 polys by default
   const [polygonCount, setPolygonCount] = useState<number>(15000);
   // Show nodes with at least 1 GiB in the tree view
@@ -165,15 +142,35 @@ function App() {
 
   const [sourceCodeAnalysis, setSourceCodeAnalysis] = useState<SourceCodeAnalysis | null>(null);
 
+  useEffect(() => {
+    console.log('Trying to apply new snapshot data.');
+    if (!snapshotData) return;
 
-  useEffect(() => { 
+    setAllMemoryTree(null);
+    setActiveMemoryTree(null);
+    setTimePrunedMemoryTree(null);
+    setActiveEvents(null);
+    setSourceCodeAnalysis(null);
+    setLoadingSnapshot(true);
+
+    console.log('Applying new snapshot data.');
+    extractEvents(snapshotData, selectedDevice, progressCallback(setSnapshotLoadingProgress, 30, 60)).then(events => setAllMemoryEvents(events));
+
+    if (snapshotData.source_code) {
+      setupSourceCodeAnalysis(snapshotData.source_code).then(sca => setSourceCodeAnalysis(sca));
+    }
+
+  }, [snapshotData, selectedDevice])
+
+
+  useEffect(() => {
     const hasData = allMemoryEvents && polygonData && totalMemoryOverTime;
     if (hasData) setLoadingSnapshot(false);
   }, [allMemoryEvents, polygonData, totalMemoryOverTime])
 
   useEffect(() => {
     if (!allMemoryEvents) return;
-    parseMemoryTree(allMemoryEvents, sourceCodeAnalysis).then(memTree => setAllMemoryTree(memTree));
+    parseMemoryTree(allMemoryEvents, sourceCodeAnalysis, progressCallback(setMemoryTreeBuildingProgress, 0, 50)).then(memTree => setAllMemoryTree(memTree));
   }, [allMemoryEvents, sourceCodeAnalysis]);
 
   useEffect(() => {
@@ -185,13 +182,12 @@ function App() {
     if (!activeEvents) return;
     setTotalMemoryOverTime(calculateTotalMemoryOverTime(activeEvents));
     console.log(`Creating polygons from ${activeEvents.length} entries`)
-    setPolygonData(buildPolygonData(activeEvents, polygonCount));
+    buildPolygonData(activeEvents, polygonCount, progressCallback(setSnapshotLoadingProgress, 60, 100)).then(polyData => setPolygonData(polyData));
   }, [activeEvents]);
 
   useEffect(() => {
     if (!activeEvents || !allMemoryTree) return;
-    let newTree = pruneMemoryTreeToEvents(allMemoryTree, activeEvents);
-    setActiveMemoryTree(newTree);
+    pruneMemoryTreeToEvents(allMemoryTree, activeEvents, progressCallback(setMemoryTreeBuildingProgress, 50, 70)).then(tree => setActiveMemoryTree(tree));
   }, [activeEvents, allMemoryTree])
 
 
@@ -200,19 +196,19 @@ function App() {
     let toSet: MemoryTree;
     if (activeTime == null) {
       toSet = activeMemoryTree;
+      const nodesByMethodName = aggregateInfo(toSet);
+      setNodeByMethodNameLookup(nodesByMethodName);
+      setTimePrunedMemoryTree(toSet);
     } else {
-      toSet = pruneMemoryTreeByTime(activeMemoryTree, activeTime);
+      pruneMemoryTreeByTime(activeMemoryTree, activeTime, progressCallback(setMemoryTreeBuildingProgress, 70, 100)).then( memoryTree => {
+        const nodesByMethodName = aggregateInfo(memoryTree);
+        setNodeByMethodNameLookup(nodesByMethodName);
+        setTimePrunedMemoryTree(memoryTree);
+      });
     }
-    const nodesByMethodName = aggregateInfo(toSet);
-    setNodeByMethodNameLookup(nodesByMethodName);
-    setTimePrunedMemoryTree(toSet);
   }, [activeMemoryTree, activeTime]);
 
 
-  const onSnapshotProcessed = ({ events, sourceCodeAnalysis }: ProcessedSnapshotData) => {
-    setAllMemoryEvents(events);
-    if (sourceCodeAnalysis) setSourceCodeAnalysis(sourceCodeAnalysis);
-  }
 
   const onSelectAllocationTimeline = (events: MemoryEvent[], t: number | null) => {
     if (events.length == 0) {
@@ -331,27 +327,29 @@ function App() {
     console.log("Trying to change poly count");
     if (!activeEvents) return;
     console.log(`Restricting to ${polygonCount} polys`);
-    setPolygonData(buildPolygonData(activeEvents, n));
+    buildPolygonData(activeEvents, n, progressCallback(setSnapshotLoadingProgress, 60, 100)).then(polyData => setPolygonData(polyData));
+  }
+
+  const progressCallback = (proggressSetter: (p: number)=>void, low=0, high=100) => {
+    return (p: number) => proggressSetter(Math.floor(low + (high - low) * p / 100));
   }
 
   return (
     <>
-      <Header githubUrl="https://github.com/kilianmandon/torch-memory-visualizer"/>
-      <DropZone showEmptyState={!hasData && !loadingSnapshot} onFile={f => { 
-        setAllMemoryTree(null);
-        setActiveMemoryTree(null);
-        setActiveEvents(null);
-        setSourceCodeAnalysis(null);
-        setLoadingSnapshot(true); 
-        processSnapshotFile(f).then(data => onSnapshotProcessed(data)); }}>
+      <Header githubUrl="https://github.com/kilianmandon/torch-memory-visualizer" />
+      <DropZone showEmptyState={!hasData && !loadingSnapshot} onFile={f => {
+
+        unpickleUsingJS(f, progressCallback(setSnapshotLoadingProgress, 0, 30)).then(data => setSnapshotData(data));
+      }}>
         <Group className={styles.app} orientation="vertical">
           <Panel style={{ width: "100%" }} defaultSize="40vh">
-            {loadingSnapshot ? 
-            <Placeholder
-              loading
-              title="Loading data..."
-            /> :
-            hasData &&
+            {loadingSnapshot ?
+              <Placeholder
+                loading
+                title="Loading data..."
+                progress={snapshotLoadingProgress}
+              /> :
+              hasData &&
               <AllocationTimeline nodeSelection={nodeSelection} polygonData={polygonData} onSelect={onSelectAllocationTimeline} totalMemoryOverTime={totalMemoryOverTime} memoryEvents={allMemoryEvents} activeTime={activeTime} memoryTree={timePrunedMemoryTree} />
             }
           </Panel>
@@ -360,13 +358,14 @@ function App() {
               <Panel defaultSize="30em">
                 {hasData &&
                   <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                    <ButtonControls onSelection={setActiveEventsToSelection} onFull={setActiveEventsToAllMemEvents} onPeak={activeTimeToPeak} polygonCount={polygonCount} nodeThreshold={nodeThreshold} onPolygonChange={(n) => { setPolygonCount(n); if (activeEvents) setPolygonData(buildPolygonData(activeEvents, n)); }} onNodeThresholdChange={(x) => { setNodeThreshold(x) }} onPolygonChangeCommitted={onPolygonNumChangeCommited} numMemoryEvents={activeEvents?.length ?? 0} />
+                    <ButtonControls onSelection={setActiveEventsToSelection} onFull={setActiveEventsToAllMemEvents} onPeak={activeTimeToPeak} polygonCount={polygonCount} nodeThreshold={nodeThreshold} onPolygonChange={(n) => { setPolygonCount(n); if (activeEvents) { buildPolygonData(activeEvents, n, progressCallback(setSnapshotLoadingProgress, 60, 100)).then(polyData => setPolygonData(polyData)); } }} onNodeThresholdChange={(x) => { setNodeThreshold(x) }} onPolygonChangeCommitted={onPolygonNumChangeCommited} numMemoryEvents={activeEvents?.length ?? 0} selectedDevice={selectedDevice} numDevices={snapshotData?.device_traces.length ?? 1} onDeviceChange={(i)=>setSelectedDevice(i)}/>
                     <div className={styles.controlsDivider} />
                     {!timePrunedMemoryTree ?
                       <Placeholder
                         loading
                         title="Building memory tree..."
                         subtitle="This may take a few seconds"
+                        progress={memoryTreeBuildingProgress}
                       />
                       : (
                         <MemoryTreeView memoryTree={timePrunedMemoryTree} onClick={onClickMemoryTree} nodeSelection={nodeSelection} nodeThreshold={nodeThreshold} />

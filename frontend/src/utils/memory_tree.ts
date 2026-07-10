@@ -75,11 +75,18 @@ export async function setupSourceCodeAnalysis(sourceFiles: Map<string, string[]>
     }
 }
 
-export async function parseMemoryTree(events: MemoryEvent[], sca: SourceCodeAnalysis | null): Promise<MemoryTree> {
+export async function parseMemoryTree(events: MemoryEvent[], sca: SourceCodeAnalysis | null, progressCallback: (p:number)=>void): Promise<MemoryTree> {
     const memoryTree: MemoryTree = { roots: [] };
     let nodeIDCounter = 0;
+    let progress = 0;
 
     for (let i = 0; i < events.length; i++) {
+        let newProgress = Math.floor(i/events.length*100);
+        if (newProgress > progress) {
+            progress = newProgress;
+            progressCallback(progress);
+        }
+        if ((i+1) % 500 == 0) await new Promise(resolve => setTimeout(resolve, 0));
         const event = events[i];
         const contextStack: Context[] = [];
         for (const frame of event.frames) {
@@ -124,7 +131,6 @@ export async function parseMemoryTree(events: MemoryEvent[], sca: SourceCodeAnal
             });
         }
         nodeIDCounter = insertIntoTree(memoryTree, event, contextStack, nodeIDCounter);
-        if (i % 500 == 0) await new Promise(resolve => setTimeout(resolve, 0));
     }
 
     return memoryTree;
@@ -173,6 +179,21 @@ export function* walkAllNodes(memoryTree: MemoryTree) {
     }
 }
 
+export function* walkAllNodesBreadthFirst(memoryTree: MemoryTree) {
+    const queue: TreeNode[] = [...memoryTree.roots];
+    while (queue.length > 0) {
+        const node = queue.shift()!;
+        yield node;
+        if (isMethodNode(node)) {
+            for (let line of node.lines) {
+                for (let child of line) {
+                    queue.push(child);
+                }
+            }
+        }
+    }
+}
+
 export function aggregateInfo(memoryTree: MemoryTree): Map<string, Set<number>> {
     // Reset old aggregation info
     for (const node of walkAllNodes(memoryTree)) {
@@ -196,22 +217,41 @@ export function aggregateInfo(memoryTree: MemoryTree): Map<string, Set<number>> 
     return nodesByMethodName;
 }
 
-export function pruneMemoryTreeByTime(memoryTree: MemoryTree, t: number) {
+export async function pruneMemoryTreeByTime(memoryTree: MemoryTree, t: number, progressCallback: (p: number)=>void) {
     const predicate = (allocationNode: AllocationNode) => allocationNode.event.start <= t && t < allocationNode.event.end;
-    return pruneMemoryTree(memoryTree, predicate)
+    return await pruneMemoryTree(memoryTree, predicate, progressCallback)
 }
 
-export function pruneMemoryTreeToEvents(memoryTree: MemoryTree, events: MemoryEvent[]) {
+export async function pruneMemoryTreeToEvents(memoryTree: MemoryTree, events: MemoryEvent[], progressCallback: (p: number)=>void) {
     const eventIDs = events.map(e => e.event_index);
     const predicate = (allocNode: AllocationNode) => eventIDs.includes(allocNode.event.event_index);
-    return pruneMemoryTree(memoryTree, predicate);
+    return await pruneMemoryTree(memoryTree, predicate, progressCallback);
 }
 
-export function pruneMemoryTree(memoryTree: MemoryTree, predicate: (node: AllocationNode) => boolean): MemoryTree {
+export async function pruneMemoryTree(memoryTree: MemoryTree, predicate: (node: AllocationNode) => boolean, progressCallback: (p: number)=>void): Promise<MemoryTree> {
+    const nodesOnProgress = [];
+    for (const node of walkAllNodesBreadthFirst(memoryTree)) {
+        nodesOnProgress.push(node);
+        if (nodesOnProgress.length > 100) break;
+    }
+    const progressContext: ProgressContext = {
+        nodesOnProgress: nodesOnProgress.filter(a => isMethodNode(a)).map(a => a.node_id!),
+        nodesFound: 0,
+        iterationCounter: 0,
+    }
+
+    const innerProgressCallback = () => {
+        progressContext.nodesFound++
+        progressCallback(Math.floor(progressContext.nodesFound / progressContext.nodesOnProgress.length * 100))
+    }
+    
+    progressContext.progressCallback = innerProgressCallback
+
+
     const newRoots = [];
     for (const root of memoryTree.roots) {
         if (isMethodNode(root)) {
-            const newRoot = pruneMethodNode(root, predicate);
+            const newRoot = await pruneMethodNode(root, predicate, progressContext);
             if (newRoot) newRoots.push(newRoot);
         } else {
             const allocNode = (root as AllocationNode);
@@ -222,14 +262,24 @@ export function pruneMemoryTree(memoryTree: MemoryTree, predicate: (node: Alloca
     return { roots: newRoots }
 }
 
-function pruneMethodNode(methodNode: MethodNode, predicate: (allocNode: AllocationNode) => boolean): MethodNode | null {
+type ProgressContext = {
+    nodesOnProgress: number[],
+    nodesFound: number,
+    iterationCounter: number,
+    progressCallback?: ()=>void
+}
+
+async function pruneMethodNode(methodNode: MethodNode, predicate: (allocNode: AllocationNode) => boolean, progressContext: ProgressContext): Promise<MethodNode | null> {
     const newLines = [];
     let anyChildren = false;
+    if (progressContext.nodesOnProgress.includes(methodNode.node_id ?? -1)) {
+        progressContext.progressCallback?.();
+    }
     for (const oldChildren of methodNode.lines) {
         const newChildren = [];
         for (const oldChild of oldChildren) {
             if (isMethodNode(oldChild)) {
-                const newChild = pruneMethodNode(oldChild, predicate);
+                const newChild = await pruneMethodNode(oldChild, predicate, progressContext);
                 if (newChild) {
                     newChildren.push(newChild);
                     newChild.parent = methodNode;
@@ -240,6 +290,10 @@ function pruneMethodNode(methodNode: MethodNode, predicate: (allocNode: Allocati
                     oldChild.parent = methodNode;
                     newChildren.push(oldChild);
                 }
+            }
+            progressContext.iterationCounter++;
+            if (progressContext.iterationCounter % 10_000 == 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
         newLines.push(newChildren);
