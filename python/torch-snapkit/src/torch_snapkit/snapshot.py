@@ -94,6 +94,7 @@ class memory_snapshot:
             if exc_type is not None and exc_type!=torch.OutOfMemoryError:
                 print("Exception observed (non-OOM), snapshot is not being saved.")
             else:
+                print('Starting memory trace processing...')
                 if not self._ended_with_oom:
                     data = torch.cuda.memory._snapshot() 
                 else:
@@ -107,25 +108,37 @@ class memory_snapshot:
                 rank = 0 if not distributed else torch.distributed.get_rank()
 
                 if distributed:
-                    world_size = torch.distributed.get_world_size()
-                    all_data = [None for _ in range(world_size)]
-                    torch.distributed.gather_object(data, all_data, dst=0)
+                    try:
+                        print('Gathering traces from distributed GPUs...')
+                        world_size = torch.distributed.get_world_size()
+                        all_data = [None for _ in range(world_size)] if rank==0 else None
+                        torch.distributed.gather_object(data, all_data, dst=0)
+                        print('Gathering complete.')
 
-                    if rank==0:
-                        data['device_traces'] = [all_data[i]['device_traces'][i] for i in range(world_size)]
-                        data['shape_data'] = [all_data[i]['shape_data'][0] for i in range(world_size)]
+                        if rank==0:
+                            data['device_traces'] = [all_data[i]['device_traces'][i] for i in range(world_size)]
+                            if self.log_shapes:
+                                data['shape_data'] = [all_data[i]['shape_data'][0] for i in range(world_size)]
+                    except Exception as e:
+                        if rank==0:
+                            print(f'Trace gathering failed: {e}. Only data from rank 0 will be saved.')
 
                 
                 if rank==0:
+                    print('Saving data...')
                     if self.save_path is not None:
-                        out_path = self.save_path
+                        out_path = Path(self.save_path)
                     else:
-                        out_path = self.tempdir + f'/{self.snapshot_name}_snapshot.pkl'
+                        out_path = Path(self.tempdir + f'/{self.snapshot_name}_snapshot.pkl')
+
+                    if self._ended_with_oom:
+                        out_path = out_path.with_name(f'oom_{out_path.name}')
 
                     self.attach_source_code(data, out_path)
 
                     if self.share:
                         self.share_snapshot(out_path)
+                    print('Done.')
         finally:
             self._stack.close()
             torch.cuda.memory._record_memory_history(enabled=None)

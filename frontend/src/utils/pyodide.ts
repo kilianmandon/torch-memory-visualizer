@@ -21,7 +21,9 @@ export async function unpickleUsingJS(file: File, progressCallback: (p: number) 
     const buffer = await file.arrayBuffer();
     const obj = await unpickleData(buffer, progressCallback);
     obj.device_traces.forEach((device_trace: TraceEvent[]) => {
-        device_trace.forEach((e: TraceEvent) => e.addr = BigInt(e.addr))
+        device_trace.forEach((e: TraceEvent) => {
+            e.addr = BigInt(e.addr ?? -1);
+        })
     });
     if (obj.source_code) {
         const codeMap = new Map<string, string[]>();
@@ -32,8 +34,10 @@ export async function unpickleUsingJS(file: File, progressCallback: (p: number) 
     }
     if (obj.shape_data) {
         const shapeDataList: ShapeData[] = obj.shape_data;
-        const shapeMaps = new Array(shapeDataList.length).map(_ => new Map<string, ShapeEntry[]>());
+        const shapeMaps = [...Array(shapeDataList.length).keys()].map(_ => new Map<string, ShapeEntry[]>());
+        console.log(`Instantiated ${shapeMaps.length} new maps`)
         for (const [index, shapeData] of shapeDataList.entries()) {
+            console.log(`Querying ${index} ${shapeMaps[0]}`)
             for (const [addr, data] of Object.entries(shapeData)) {
                 shapeMaps[index].set(addr, data.map((vs) => ({
                     func: vs[0],
