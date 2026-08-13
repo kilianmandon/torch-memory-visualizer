@@ -137,7 +137,15 @@ class memory_snapshot:
                     self.attach_source_code(data, out_path)
 
                     if self.share:
-                        self.share_snapshot(out_path)
+                        sharing_result = self.share_snapshot(out_path)
+                        if not sharing_result and self.save_path is None:
+                            try:
+                                non_temp_out_path = Path(out_path.name)
+                                print(f'Creating permanent copy of snapshot at {non_temp_out_path}.')
+                                shutil.copy(out_path, non_temp_out_path)
+                            except:
+                                print('Failed to create permanent copy.')
+
                     print('Done.')
         finally:
             self._stack.close()
@@ -155,11 +163,12 @@ class memory_snapshot:
             result = subprocess.run(cmd, env=env)
             if result.returncode == 0:
                 print("Transfer successful!")
-                break
+                return True
             else:
                 print("Transfer failed, retrying...")
         else:
             print("Transfer failed. Memory snapshot was not shared.")
+            return False
 
 
 
